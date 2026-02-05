@@ -8,114 +8,94 @@
 
 <style>
 body {
-    font-family: Arial, sans-serif;
-    background: #eef2f7;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 100vh;
-    margin: 0;
+  font-family: Arial, sans-serif;
+  background: #eef2f7;
+  margin: 0;
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 .container {
-    background: white;
-    padding: 20px;
-    width: 100%;
-    max-width: 400px;
-    border-radius: 12px;
-    box-shadow: 0 4px 10px rgba(0,0,0,.2);
-    text-align: center;
+  background: #fff;
+  padding: 20px;
+  max-width: 400px;
+  width: 100%;
+  border-radius: 12px;
+  text-align: center;
 }
 button {
-    width: 100%;
-    padding: 14px;
-    margin: 8px 0;
-    border: none;
-    border-radius: 8px;
-    background: #0066ff;
-    color: white;
-    font-size: 16px;
+  width: 100%;
+  padding: 14px;
+  margin: 8px 0;
+  font-size: 16px;
+  border: none;
+  border-radius: 8px;
+  background: #0066ff;
+  color: #fff;
 }
 video {
-    width: 100%;
-    margin-top: 15px;
-    border-radius: 10px;
-    background: black;
+  width: 100%;
+  margin-top: 12px;
+  background: black;
+  border-radius: 8px;
 }
-.result {
-    margin-top: 12px;
-    font-weight: bold;
+#result {
+  margin-top: 10px;
+  font-weight: bold;
 }
 </style>
 </head>
 
 <body>
 <div class="container">
-    <h2>Code Scanner</h2>
-    <button onclick="scanQR()">Scan QR Code</button>
-    <button onclick="scanBarcode()">Scan Barcode</button>
-    <video id="video" autoplay playsinline></video>
-    <div class="result" id="result">Idle</div>
+  <h2>Code Scanner</h2>
+  <button onclick="scanQR()">Scan QR Code</button>
+  <button onclick="scanBarcode()">Scan Barcode</button>
+  <video id="video" autoplay playsinline></video>
+  <div id="result">Idle</div>
 </div>
 
 <script>
 const video = document.getElementById("video");
-const resultBox = document.getElementById("result");
-let reader;
-let currentStream;
-
-function stopCamera() {
-    if (reader) reader.reset();
-    if (currentStream) {
-        currentStream.getTracks().forEach(t => t.stop());
-        currentStream = null;
-    }
-}
-
-async function scanQR() {
-    await startScan([ZXing.BarcodeFormat.QR_CODE]);
-}
-
-async function scanBarcode() {
-    await startScan([
-        ZXing.BarcodeFormat.CODE_128,
-        ZXing.BarcodeFormat.CODE_39,
-        ZXing.BarcodeFormat.EAN_13,
-        ZXing.BarcodeFormat.EAN_8,
-        ZXing.BarcodeFormat.UPC_A,
-        ZXing.BarcodeFormat.UPC_E
-    ]);
-}
+const result = document.getElementById("result");
+let reader = new ZXing.BrowserMultiFormatReader();
 
 async function startScan(formats) {
-    stopCamera();
-    resultBox.textContent = "Opening camera...";
+  reader.reset();
+  result.textContent = "Scanning...";
 
-    reader = new ZXing.BrowserMultiFormatReader(
-        new Map([[ZXing.DecodeHintType.POSSIBLE_FORMATS, formats]])
-    );
+  try {
+    const devices = await ZXing.BrowserCodeReader.listVideoInputDevices();
+    const cameraId = devices.length ? devices[devices.length - 1].deviceId : null;
 
-    try {
-        const devices = await ZXing.BrowserCodeReader.listVideoInputDevices();
-        const backCamera = devices.find(d => d.label.toLowerCase().includes("back")) || devices[0];
-
-        resultBox.textContent = "Scanning...";
-
-        reader.decodeOnceFromVideoDevice(
-            backCamera.deviceId,
-            video
-        ).then(result => {
-            resultBox.textContent = "Result: " + result.text;
-            stopCamera();
-        }).catch(err => {
-            console.error(err);
-            resultBox.textContent = "Scan failed. Try again.";
-            stopCamera();
-        });
-
-    } catch (err) {
+    reader.decodeOnceFromVideoDevice(cameraId, video)
+      .then(res => {
+        result.textContent = "Result: " + res.text;
+        reader.reset();
+      })
+      .catch(err => {
         console.error(err);
-        resultBox.textContent = "Camera error.";
-    }
+        result.textContent = "Scan cancelled or failed";
+      });
+
+  } catch (e) {
+    console.error(e);
+    result.textContent = "Camera error";
+  }
+}
+
+function scanQR() {
+  startScan([ZXing.BarcodeFormat.QR_CODE]);
+}
+
+function scanBarcode() {
+  startScan([
+    ZXing.BarcodeFormat.CODE_128,
+    ZXing.BarcodeFormat.EAN_13,
+    ZXing.BarcodeFormat.EAN_8,
+    ZXing.BarcodeFormat.UPC_A
+  ]);
 }
 </script>
 </body>
