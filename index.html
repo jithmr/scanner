@@ -58,30 +58,57 @@ video {
 
 <script>
 const video = document.getElementById("video");
-const result = document.getElementById("result");
-let reader = new ZXing.BrowserMultiFormatReader();
+const resultBox = document.getElementById("result");
+
+let reader;
+let stream;
+
+function stopCamera() {
+  if (reader) {
+    reader.reset();
+    reader = null;
+  }
+  if (stream) {
+    stream.getTracks().forEach(t => t.stop());
+    stream = null;
+  }
+}
 
 async function startScan(formats) {
-  reader.reset();
-  result.textContent = "Scanning...";
+  stopCamera();
+  resultBox.textContent = "Opening camera...";
+
+  const hints = new Map();
+  hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
+
+  reader = new ZXing.BrowserMultiFormatReader(hints);
 
   try {
-    const devices = await ZXing.BrowserCodeReader.listVideoInputDevices();
-    const cameraId = devices.length ? devices[devices.length - 1].deviceId : null;
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { ideal: "environment" },
+        width: { ideal: 1280 },
+        height: { ideal: 720 }
+      }
+    });
 
-    reader.decodeOnceFromVideoDevice(cameraId, video)
-      .then(res => {
-        result.textContent = "Result: " + res.text;
-        reader.reset();
+    video.srcObject = stream;
+    resultBox.textContent = "Scanning...";
+
+    reader.decodeOnceFromVideoElement(video)
+      .then(result => {
+        resultBox.textContent = "Result: " + result.text;
+        stopCamera();
       })
       .catch(err => {
         console.error(err);
-        result.textContent = "Scan cancelled or failed";
+        resultBox.textContent = "Scan failed. Try again.";
+        stopCamera();
       });
 
-  } catch (e) {
-    console.error(e);
-    result.textContent = "Camera error";
+  } catch (err) {
+    console.error(err);
+    resultBox.textContent = "Camera permission denied or unavailable.";
   }
 }
 
