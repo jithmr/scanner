@@ -51,8 +51,8 @@ video {
 <body>
 <div class="container">
     <h2>Code Scanner</h2>
-    <button onclick="scan('qr')">Scan QR Code</button>
-    <button onclick="scan('barcode')">Scan Barcode</button>
+    <button onclick="scanQR()">Scan QR Code</button>
+    <button onclick="scanBarcode()">Scan Barcode</button>
     <video id="video" autoplay playsinline></video>
     <div class="result" id="result">Idle</div>
 </div>
@@ -60,62 +60,62 @@ video {
 <script>
 const video = document.getElementById("video");
 const resultBox = document.getElementById("result");
-let stream;
 let reader;
+let currentStream;
 
-async function scan(type) {
-
-    if (!window.isSecureContext) {
-        resultBox.textContent = "ERROR: Page must be served over HTTPS";
-        return;
+function stopCamera() {
+    if (reader) reader.reset();
+    if (currentStream) {
+        currentStream.getTracks().forEach(t => t.stop());
+        currentStream = null;
     }
+}
 
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        resultBox.textContent = "ERROR: Camera API not supported";
-        return;
-    }
+async function scanQR() {
+    await startScan([ZXing.BarcodeFormat.QR_CODE]);
+}
 
-    stop();
+async function scanBarcode() {
+    await startScan([
+        ZXing.BarcodeFormat.CODE_128,
+        ZXing.BarcodeFormat.CODE_39,
+        ZXing.BarcodeFormat.EAN_13,
+        ZXing.BarcodeFormat.EAN_8,
+        ZXing.BarcodeFormat.UPC_A,
+        ZXing.BarcodeFormat.UPC_E
+    ]);
+}
 
-    const formats = type === "qr"
-        ? [ZXing.BarcodeFormat.QR_CODE]
-        : [
-            ZXing.BarcodeFormat.CODE_128,
-            ZXing.BarcodeFormat.CODE_39,
-            ZXing.BarcodeFormat.EAN_13,
-            ZXing.BarcodeFormat.EAN_8,
-            ZXing.BarcodeFormat.UPC_A,
-            ZXing.BarcodeFormat.UPC_E
-        ];
+async function startScan(formats) {
+    stopCamera();
+    resultBox.textContent = "Opening camera...";
 
     reader = new ZXing.BrowserMultiFormatReader(
         new Map([[ZXing.DecodeHintType.POSSIBLE_FORMATS, formats]])
     );
 
     try {
-        stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: "environment" }
-        });
+        const devices = await ZXing.BrowserCodeReader.listVideoInputDevices();
+        const backCamera = devices.find(d => d.label.toLowerCase().includes("back")) || devices[0];
 
-        video.srcObject = stream;
         resultBox.textContent = "Scanning...";
 
-        reader.decodeFromVideoElement(video, (result) => {
-            if (result) {
-                resultBox.textContent = "Result: " + result.text;
-                stop();
-            }
+        reader.decodeOnceFromVideoDevice(
+            backCamera.deviceId,
+            video
+        ).then(result => {
+            resultBox.textContent = "Result: " + result.text;
+            stopCamera();
+        }).catch(err => {
+            console.error(err);
+            resultBox.textContent = "Scan failed. Try again.";
+            stopCamera();
         });
 
     } catch (err) {
         console.error(err);
-        resultBox.textContent = "Camera blocked. Check browser permissions.";
+        resultBox.textContent = "Camera error.";
     }
-}
-
-function stop() {
-    if (reader) reader.reset();
-    if (stream) stream.getTracks().forEach(t => t.stop());
 }
 </script>
 </body>
