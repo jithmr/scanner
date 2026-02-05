@@ -1,74 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>QR & Barcode Scanner</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<script src="https://unpkg.com/html5-qrcode"></script>
+
+<style>
+body {
+  font-family: Arial, sans-serif;
+  background: #eef2f7;
+  margin: 0;
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.container {
+  background: #fff;
+  padding: 20px;
+  max-width: 400px;
+  width: 100%;
+  border-radius: 12px;
+  text-align: center;
+}
+button {
+  width: 100%;
+  padding: 14px;
+  margin: 8px 0;
+  font-size: 16px;
+  border: none;
+  border-radius: 8px;
+  background: #0066ff;
+  color: #fff;
+}
+#reader {
+  width: 100%;
+  margin-top: 12px;
+}
+#result {
+  margin-top: 10px;
+  font-weight: bold;
+}
+</style>
+</head>
+
+<body>
+<div class="container">
+  <h2>Code Scanner</h2>
+  <button onclick="startQR()">Scan QR Code</button>
+  <button onclick="startBarcode()">Scan Barcode</button>
+
+  <div id="reader"></div>
+  <div id="result">Idle</div>
+</div>
+
 <script>
-const video = document.getElementById("video");
+let html5QrCode;
 const resultBox = document.getElementById("result");
 
-let reader = null;
-let stream = null;
-let scanning = false;
-
-function stopCamera() {
-  scanning = false;
-  if (reader) {
-    reader.reset();
-    reader = null;
-  }
-  if (stream) {
-    stream.getTracks().forEach(t => t.stop());
-    stream = null;
+function stopScanner() {
+  if (html5QrCode) {
+    html5QrCode.stop().catch(() => {});
+    html5QrCode = null;
   }
 }
 
-async function startScan(formats) {
-  stopCamera();
-  resultBox.textContent = "Opening camera...";
-
-  const hints = new Map();
-  hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
-
-  reader = new ZXing.BrowserMultiFormatReader(hints);
-
-  try {
-    // THIS is the ONLY place permission can fail
-    stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "environment" }
-    });
-
-    video.srcObject = stream;
-    scanning = true;
-    resultBox.textContent = "Scanning...";
-
-    reader.decodeFromVideoElement(video, (result, err) => {
-      if (!scanning) return;
-
-      if (result) {
-        resultBox.textContent = "Result: " + result.text;
-        stopCamera();
-        return;
-      }
-
-      // Ignore normal scan failures (this is EXPECTED)
-      if (err && !(err instanceof ZXing.NotFoundException)) {
-        console.error("ZXing error:", err);
-      }
-    });
-
-  } catch (err) {
-    // This runs ONLY if camera truly cannot be accessed
-    console.error("getUserMedia error:", err);
-    resultBox.textContent = "Camera could not be accessed.";
-  }
+function startQR() {
+  startScanner(["qr_code"]);
 }
 
-function scanQR() {
-  startScan([ZXing.BarcodeFormat.QR_CODE]);
-}
-
-function scanBarcode() {
-  startScan([
-    ZXing.BarcodeFormat.CODE_128,
-    ZXing.BarcodeFormat.EAN_13,
-    ZXing.BarcodeFormat.EAN_8,
-    ZXing.BarcodeFormat.UPC_A
+function startBarcode() {
+  startScanner([
+    "code_128",
+    "ean_13",
+    "ean_8",
+    "upc_a",
+    "upc_e"
   ]);
 }
+
+function startScanner(formats) {
+  stopScanner();
+  resultBox.textContent = "Scanning...";
+
+  html5QrCode = new Html5Qrcode("reader");
+
+  Html5Qrcode.getCameras().then(cameras => {
+    const cameraId = cameras.find(c => c.label.toLowerCase().includes("back"))?.id
+                  || cameras[0].id;
+
+    html5QrCode.start(
+      cameraId,
+      {
+        fps: 10,
+        qrbox: { width: 250, height: 250 },
+        formatsToSupport: formats
+      },
+      decodedText => {
+        resultBox.textContent = "Result: " + decodedText;
+        stopScanner();
+      },
+      error => {
+        // Ignore scan errors (normal)
+      }
+    );
+  }).catch(err => {
+    console.error(err);
+    resultBox.textContent = "Camera not available.";
+  });
+}
 </script>
+</body>
+</html>
